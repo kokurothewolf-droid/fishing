@@ -75,6 +75,85 @@
 
   a { color: #7ec4cf; }
   a:hover { color: #a8d1d8; }
+
+  /* ============================================================
+     MOBILE FALLBACKS — CSS-driven, robust against JS hook failures.
+     Override inline grid/flex inline styles with !important at <=720px.
+     ============================================================ */
+  @media (max-width: 720px) {
+    /* Any container marked as a responsive grid collapses to one column */
+    [data-rt-stack] {
+      grid-template-columns: 1fr !important;
+    }
+    /* Flex rows that should stack on mobile */
+    [data-rt-flex-stack] {
+      flex-direction: column !important;
+      align-items: stretch !important;
+    }
+    /* Mode toggle should wrap if it overflows */
+    [data-rt-modes] {
+      flex-wrap: wrap !important;
+      width: 100%;
+      justify-content: flex-start !important;
+    }
+    /* Header right side: full width, left-aligned on mobile */
+    [data-rt-header-right] {
+      text-align: left !important;
+      width: 100% !important;
+    }
+    /* Outer container side padding tighter on mobile */
+    [data-rt-app] {
+      padding-left: 12px !important;
+      padding-right: 12px !important;
+    }
+    /* Headlines shrink to fit small screens */
+    [data-rt-h1] {
+      font-size: 28px !important;
+    }
+    /* SunMoon card: bite-windows row item — let label wrap */
+    [data-rt-bitewindow] {
+      grid-template-columns: auto 1fr auto !important;
+    }
+    /* Tabs: allow horizontal scroll instead of squishing */
+    [data-rt-tabs] {
+      flex-wrap: nowrap !important;
+    }
+    [data-rt-tabs] button {
+      flex: 0 0 auto !important;
+      min-width: 0 !important;
+    }
+    /* Buoy tile grid: 2 cols on phone */
+    [data-rt-tiles] {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    /* 5-day forecast: horizontal scroll with snap on phones */
+    [data-rt-forecast] {
+      display: flex !important;
+      grid-template-columns: none !important;
+      overflow-x: auto !important;
+      scroll-snap-type: x mandatory !important;
+      -webkit-overflow-scrolling: touch !important;
+      margin: 0 -6px !important;
+      padding: 2px 6px 6px !important;
+      gap: 8px !important;
+    }
+    [data-rt-forecast] > * {
+      flex: 0 0 36% !important;
+      min-width: 120px !important;
+      max-width: 150px !important;
+      scroll-snap-align: start !important;
+    }
+  }
+
+  /* Very narrow phones */
+  @media (max-width: 380px) {
+    [data-rt-tiles] {
+      grid-template-columns: 1fr !important;
+    }
+    [data-rt-h1] {
+      font-size: 24px !important;
+    }
+  }
 </style>
 </head>
 <body>
