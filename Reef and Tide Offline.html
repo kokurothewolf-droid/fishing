@@ -123,6 +123,42 @@
 
   a { color: #7ec4cf; }
   a:hover { color: #a8d1d8; }
+
+  /* ============================================================
+     MOBILE FALLBACKS — CSS-driven, robust against JS hook failures.
+     ============================================================ */
+  @media (max-width: 720px) {
+    [data-rt-stack] { grid-template-columns: 1fr !important; }
+    [data-rt-flex-stack] { flex-direction: column !important; align-items: stretch !important; }
+    [data-rt-modes] { flex-wrap: wrap !important; width: 100%; justify-content: flex-start !important; }
+    [data-rt-header-right] { text-align: left !important; width: 100% !important; }
+    [data-rt-app] { padding-left: 12px !important; padding-right: 12px !important; }
+    [data-rt-h1] { font-size: 28px !important; }
+    [data-rt-bitewindow] { grid-template-columns: auto 1fr auto !important; }
+    [data-rt-tabs] { flex-wrap: nowrap !important; }
+    [data-rt-tabs] button { flex: 0 0 auto !important; min-width: 0 !important; }
+    [data-rt-tiles] { grid-template-columns: 1fr 1fr !important; }
+    [data-rt-forecast] {
+      display: flex !important;
+      grid-template-columns: none !important;
+      overflow-x: auto !important;
+      scroll-snap-type: x mandatory !important;
+      -webkit-overflow-scrolling: touch !important;
+      margin: 0 -6px !important;
+      padding: 2px 6px 6px !important;
+      gap: 8px !important;
+    }
+    [data-rt-forecast] > * {
+      flex: 0 0 36% !important;
+      min-width: 120px !important;
+      max-width: 150px !important;
+      scroll-snap-align: start !important;
+    }
+  }
+  @media (max-width: 380px) {
+    [data-rt-tiles] { grid-template-columns: 1fr !important; }
+    [data-rt-h1] { font-size: 24px !important; }
+  }
 </style>
 </head>
 <body>

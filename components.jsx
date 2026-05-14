@@ -69,7 +69,7 @@ window.BuoyCard = function BuoyCard({ buoy, station, loading, error, monthName, 
       padding: "18px 20px",
       boxShadow: "0 0 0 1px rgba(0,0,0,0.4), 0 12px 30px rgba(0,0,0,0.3)"
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span style={{
@@ -105,8 +105,7 @@ window.BuoyCard = function BuoyCard({ buoy, station, loading, error, monthName, 
             background: "rgba(126,196,207,0.06)",
             border: "1px solid rgba(126,196,207,0.18)",
             borderRadius: 10,
-            minHeight: 50,
-            flexShrink: 0
+            minHeight: 50
           }}>
             {weatherLoading && !weather ? (
               <span style={{ color: "#7c93ad", fontFamily: "'Share Tech Mono', monospace", fontSize: 11 }}>
@@ -128,7 +127,7 @@ window.BuoyCard = function BuoyCard({ buoy, station, loading, error, monthName, 
           </div>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+      <div data-rt-tiles style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
         <Tile label="Air"     value={buoy?.airF}   unit="°F" />
         <Tile label="Water"   value={buoy?.waterF} unit="°F" hot={buoy?.waterF != null && buoy.waterF >= 60} />
         <Tile label="Wind"    value={buoy?.windMph != null ? `${buoy.windMph} ${buoy.windDir || ""}`.trim() : null} unit="mph" />
@@ -253,7 +252,7 @@ window.GamePlanCard = function GamePlanCard({ plan, topSpecies, period, monthNam
 
         {/* Mode toggle: Shore / Boat / Both */}
         {onModeChange && (
-          <div style={{
+          <div data-rt-modes style={{
             display: "inline-flex",
             border: "1px solid rgba(126,196,207,0.3)",
             borderRadius: 999,
@@ -334,7 +333,7 @@ window.PeriodCard = function PeriodCard({ period, next, minutesUntilNext }) {
 // ---------- Tabs ----------
 window.TabBar = function TabBar({ tabs, active, onChange }) {
   return (
-    <div style={{
+    <div data-rt-tabs style={{
       display: "flex",
       gap: 4,
       background: "rgba(8,18,34,0.7)",
@@ -590,9 +589,206 @@ Object.assign(window, {
   // Already attached above, but re-declare for clarity
 });
 
+// ---------- 5-Day Bite Forecast ----------
+// Horizontal row of day cards. Each shows weather + top species + day rating.
+// Today is highlighted; tap any species emoji to open its detail modal.
+window.ForecastCard = function ForecastCard({ days, loading, error, onSpeciesClick, locationName }) {
+  if (!days?.length && !loading && !error) return null;
+
+  return (
+    <div style={{
+      background: "linear-gradient(180deg, rgba(14,28,50,0.85), rgba(8,18,34,0.85))",
+      border: "1px solid rgba(126,196,207,0.2)",
+      borderRadius: 14,
+      padding: "14px 18px 16px",
+      marginBottom: 16
+    }}>
+      <div data-rt-flex-stack style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        gap: 10, marginBottom: 12, flexWrap: "wrap"
+      }}>
+        <div style={{
+          color: "#7ec4cf",
+          fontFamily: "'Share Tech Mono', monospace",
+          fontSize: 11, letterSpacing: 2, textTransform: "uppercase",
+          display: "flex", alignItems: "center", gap: 8
+        }}>
+          <span style={{ fontSize: 14 }}>📅</span>
+          <span>5-Day Bite Forecast{locationName ? ` · ${locationName}` : ""}</span>
+        </div>
+        <div style={{ color: "#7c93ad", fontSize: 10.5, fontFamily: "'Share Tech Mono', monospace", letterSpacing: 0.5 }}>
+          Prime-window average · top species each day
+        </div>
+      </div>
+
+      {loading && (
+        <div style={{
+          color: "#7c93ad",
+          fontFamily: "'Share Tech Mono', monospace",
+          fontSize: 12, padding: "20px 0", textAlign: "center"
+        }}>FETCHING FORECAST…</div>
+      )}
+
+      {error && !loading && (
+        <div style={{
+          padding: "10px 12px",
+          background: "rgba(230,181,74,0.06)",
+          border: "1px solid rgba(230,181,74,0.25)",
+          borderRadius: 8,
+          color: "#e6b54a", fontSize: 12,
+          fontFamily: "'Share Tech Mono', monospace"
+        }}>
+          Forecast unreachable ({error})
+        </div>
+      )}
+
+      {!loading && !error && days?.length > 0 && (
+        <div data-rt-forecast style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+          gap: 8
+        }}>
+          {days.map((d, i) => (
+            <ForecastDay key={d.isoDate || i} day={d} isToday={i === 0} onSpeciesClick={onSpeciesClick} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function ForecastDay({ day, isToday, onSpeciesClick }) {
+  const comp = day.computed;
+  const top = comp?.topSpecies?.[0];
+  const sp = top ? window.SPECIES.find(s => s.name === top.name) : null;
+  // The day rating already factors weather impact (wind, precip) on top of the
+  // species peak season — so it's what we display, not the saturated species value.
+  const dayRating = comp?.dayRating ?? top?.value ?? null;
+  const ratingColor =
+    dayRating == null ? "#7c93ad" :
+    dayRating >= 8 ? "#5fd28b" :
+    dayRating >= 6 ? "#e6b54a" :
+    dayRating >= 4 ? "#e69a4a" : "#d05858";
+
+  const wkday = day.date.toLocaleDateString(undefined, { weekday: "short" });
+  const monthDay = day.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  const handleSpeciesClick = (e) => {
+    e.stopPropagation();
+    if (sp && onSpeciesClick) onSpeciesClick(sp);
+  };
+
+  return (
+    <div style={{
+      background: isToday
+        ? "linear-gradient(180deg, rgba(126,196,207,0.12), rgba(8,18,34,0.5))"
+        : "rgba(8,18,34,0.35)",
+      border: `1px solid ${isToday ? "rgba(126,196,207,0.45)" : "rgba(126,196,207,0.12)"}`,
+      borderRadius: 10,
+      padding: "10px 6px 11px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 5,
+      alignItems: "center",
+      textAlign: "center",
+      minWidth: 0,
+      position: "relative"
+    }}>
+      {isToday && (
+        <div style={{
+          position: "absolute", top: -1, left: "50%", transform: "translateX(-50%) translateY(-50%)",
+          background: "rgba(126,196,207,0.95)",
+          color: "#021022",
+          fontFamily: "'Share Tech Mono', monospace",
+          fontSize: 8.5, letterSpacing: 1.5, fontWeight: 700,
+          padding: "1px 7px",
+          borderRadius: 999,
+          whiteSpace: "nowrap"
+        }}>TODAY</div>
+      )}
+      <div style={{
+        fontFamily: "'Share Tech Mono', monospace",
+        fontSize: 10, letterSpacing: 1.2,
+        color: isToday ? "#a8d8df" : "#9aacbd",
+        textTransform: "uppercase",
+        marginTop: isToday ? 3 : 0
+      }}>{wkday}</div>
+      <div style={{
+        fontFamily: "'Bitter', serif", fontSize: 11.5,
+        color: "#7c93ad", marginTop: -3, letterSpacing: 0.2
+      }}>{monthDay}</div>
+
+      <div style={{ fontSize: 28, lineHeight: 1, margin: "3px 0 1px" }} title={day.sky}>{day.skyIcon}</div>
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
+        <span style={{ fontFamily: "'Bitter', serif", fontSize: 18, color: "#f0f4f8", fontWeight: 600 }}>
+          {day.hiF}°
+        </span>
+        <span style={{ fontFamily: "'Bitter', serif", fontSize: 12.5, color: "#7c93ad" }}>
+          {day.loF}°
+        </span>
+      </div>
+
+      <div style={{
+        display: "flex", gap: 7, color: "#7c93ad",
+        fontFamily: "'Share Tech Mono', monospace", fontSize: 9.5, letterSpacing: 0.3,
+        whiteSpace: "nowrap"
+      }}>
+        <span title={`${day.windMph} mph ${day.windDir}`}>💨{day.windMph}</span>
+        {day.precipProb != null && day.precipProb > 0 && (
+          <span title={`${day.precipProb}% precip`}>💧{day.precipProb}%</span>
+        )}
+      </div>
+
+      <div style={{ height: 1, background: "rgba(255,255,255,0.06)", width: "85%", margin: "5px 0 3px" }} />
+
+      {sp ? (
+        <button
+          type="button"
+          onClick={handleSpeciesClick}
+          title={`Open ${sp.name} details`}
+          style={{
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            cursor: onSpeciesClick ? "pointer" : "default",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 2,
+            color: "inherit"
+          }}
+        >
+          <span style={{ fontSize: 22, lineHeight: 1 }}>{sp.emoji}</span>
+          <span style={{
+            fontFamily: "'Bitter', serif",
+            fontSize: 11.5, color: "#dbe3ec",
+            lineHeight: 1.15, textWrap: "balance",
+            maxWidth: 90
+          }}>{sp.name}</span>
+        </button>
+      ) : (
+        <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 10, color: "#7c93ad" }}>—</span>
+      )}
+
+      <span style={{
+        marginTop: 4,
+        fontFamily: "'Share Tech Mono', monospace",
+        fontSize: 10.5, letterSpacing: 0.3, fontWeight: 600,
+        color: ratingColor,
+        background: `${ratingColor}1a`,
+        border: `1px solid ${ratingColor}55`,
+        padding: "2px 8px",
+        borderRadius: 999,
+        whiteSpace: "nowrap"
+      }} title={comp?.weatherFactors?.length ? `Weather impact: ${comp.weatherFactors.join(", ")}` : "Prime-window average"}>{dayRating != null ? dayRating.toFixed(1) : "—"}/10</span>
+    </div>
+  );
+}
+
 // ---------- Sun / Moon / Bite Windows Card ----------
 // Full-width strip showing today's astronomy and the prime bite windows.
-window.SunMoonCard = function SunMoonCard({ now, lat, lng, locationName }) {
+window.SunMoonCard = function SunMoonCard({ now, lat, lng, locationName, vp }) {
   if (lat == null || lng == null) return null;
 
   const sun = window.calcSunTimes(now, lat, lng);
@@ -615,15 +811,15 @@ window.SunMoonCard = function SunMoonCard({ now, lat, lng, locationName }) {
     .sort((a, b) => a.start - b.start)[0];
 
   return (
-    <div style={{
+    <div data-rt-stack style={{
       background: "linear-gradient(180deg, rgba(14,28,50,0.85), rgba(8,18,34,0.85))",
       border: "1px solid rgba(126,196,207,0.2)",
       borderRadius: 14,
       padding: "14px 18px",
       marginBottom: 16,
       display: "grid",
-      gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr)",
-      gap: 18,
+      gridTemplateColumns: vp?.isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr)",
+      gap: vp?.isMobile ? 14 : 18,
       alignItems: "stretch"
     }}>
       {/* SUN column */}

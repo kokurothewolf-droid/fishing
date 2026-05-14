@@ -232,6 +232,109 @@ window.fetchWeather = async function(lat, lng) {
   };
 };
 
+// ---------- 5-DAY FORECAST (Open-Meteo daily) ----------
+window.fetchForecast = async function(lat, lng, days = 5) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
+    + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,`
+    + `wind_speed_10m_max,wind_direction_10m_dominant,wind_gusts_10m_max,sunrise,sunset`
+    + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch`
+    + `&timezone=auto&forecast_days=${days}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`forecast ${res.status}`);
+  const data = await res.json();
+  const d = data.daily;
+  if (!d || !d.time) throw new Error("no daily data");
+
+  const out = [];
+  for (let i = 0; i < d.time.length; i++) {
+    // Use noon local time so it lands squarely on the day regardless of TZ
+    const date = new Date(d.time[i] + "T12:00:00");
+    const code = d.weather_code[i];
+    out.push({
+      date,
+      isoDate: d.time[i],
+      hiF: Math.round(d.temperature_2m_max[i]),
+      loF: Math.round(d.temperature_2m_min[i]),
+      precipProb: d.precipitation_probability_max[i],
+      weatherCode: code,
+      sky: window.weatherCodeToText(code),
+      skyIcon: window.weatherCodeToIcon(code, true),
+      windMph: Math.round(d.wind_speed_10m_max[i]),
+      windDir: window.degToCompass(d.wind_direction_10m_dominant[i]),
+      gustMph: d.wind_gusts_10m_max[i] != null ? Math.round(d.wind_gusts_10m_max[i]) : null,
+      sunrise: d.sunrise[i] ? new Date(d.sunrise[i]) : null,
+      sunset: d.sunset[i] ? new Date(d.sunset[i]) : null
+    });
+  }
+  return out;
+};
+
+// Compute per-day species ratings using an average across prime windows.
+// Treats the day's average air temp + max wind as a pseudo-buoy and uses the
+// month-specific seasonal water temp (water temps move slowly day to day).
+window.computeForecastDay = function(day) {
+  const monthIdx = day.date.getMonth();
+  const season = window.SEASONAL[monthIdx];
+  const pseudoBuoy = {
+    seasonal: false,
+    airF: Math.round((day.hiF + day.loF) / 2),
+    waterF: season.waterF,
+    windMph: day.windMph,
+    windDir: day.windDir,
+    gustMph: day.gustMph,
+    waveFt: day.windMph >= 22 ? 4 : day.windMph >= 15 ? 3 : day.windMph >= 10 ? 2 : 1
+  };
+  // Average across the three prime windows (dawn / dusk / midday) so that
+  // day-to-day differences in wind & temperature actually move the needle
+  // instead of getting flattened by max-of-day saturation.
+  const primeNames = ["Pre-Dawn", "Dawn", "Morning", "Midday", "Dusk", "Evening"];
+  const primePeriods = window.TIME_PERIODS.filter(p =>
+    primeNames.some(n => p.name.toLowerCase().includes(n.toLowerCase()))
+  );
+  const periods = primePeriods.length ? primePeriods : window.TIME_PERIODS;
+
+  const sum = {};
+  for (const period of periods) {
+    const ratings = window.computeSpeciesRatings(monthIdx, period, pseudoBuoy);
+    for (const name in ratings) {
+      sum[name] = sum[name] || { value: 0, n: 0 };
+      sum[name].value += ratings[name].value;
+      sum[name].n += 1;
+    }
+  }
+  const avg = {};
+  for (const name in sum) {
+    avg[name] = { value: sum[name].value / sum[name].n };
+  }
+
+  const topSpecies = Object.entries(avg)
+    .sort((a, b) => b[1].value - a[1].value)
+    .slice(0, 3)
+    .map(([name, r]) => ({ name, value: r.value }));
+
+  // Weather-impact dampener — applied to the headline day rating so the
+  // forecast actually moves when the weather changes, even if the top
+  // species is saturated at peak season.
+  let dayRating = topSpecies[0]?.value ?? 5;
+  const weatherFactors = [];
+  if (day.windMph >= 28)      { dayRating -= 1.5; weatherFactors.push(`heavy wind ${day.windMph}mph`); }
+  else if (day.windMph >= 22) { dayRating -= 0.8; weatherFactors.push(`strong wind ${day.windMph}mph`); }
+  else if (day.windMph >= 16) { dayRating -= 0.3; }
+  if (day.precipProb >= 80)      { dayRating -= 0.7; weatherFactors.push(`heavy rain ${day.precipProb}%`); }
+  else if (day.precipProb >= 60) { dayRating -= 0.3; weatherFactors.push(`rain likely ${day.precipProb}%`); }
+  // Light overcast/showers slightly help predator fish
+  else if (day.precipProb >= 30 && day.precipProb < 60) { dayRating += 0.2; }
+  dayRating = Math.max(1, Math.min(10, dayRating));
+
+  return {
+    topSpecies,
+    ratings: avg,
+    dayRating,
+    weatherFactors,
+    month: window.MONTHS[monthIdx]
+  };
+};
+
 window.weatherCodeToText = function(code) {
   if (code === 0) return "clear";
   if (code <= 2) return "partly cloudy";

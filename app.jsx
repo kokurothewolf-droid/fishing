@@ -4,6 +4,17 @@
 
 const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
+// Viewport-aware hook — drives mobile-friendly layout decisions.
+function useViewport() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => {
+    const onResize = () => setW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return { width: w, isMobile: w < 720, isTablet: w >= 720 && w < 1000 };
+}
+
 const TABS = [
   { id: "spots",      icon: "🎣", label: "LAKE SPOTS" },
   { id: "ponds",      icon: "🪣", label: "STOCKED PONDS" },
@@ -12,6 +23,7 @@ const TABS = [
 ];
 
 function App() {
+  const vp = useViewport();
   const [tab, setTab] = useState("spots");
   const [buoyId, setBuoyId] = useState("45203");
   const [buoy, setBuoy] = useState(null);
@@ -22,6 +34,11 @@ function App() {
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState(null);
+
+  // 5-day forecast (Open-Meteo daily)
+  const [forecast, setForecast] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(true);
+  const [forecastError, setForecastError] = useState(null);
 
   // Angler mode — drives game plan tactics
   const [mode, setMode] = useState("both"); // "shore" | "boat" | "both"
@@ -91,6 +108,33 @@ function App() {
           setWeather(null);
           setWeatherError(String(e.message || e).slice(0, 60));
           setWeatherLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [weatherCoords?.lat, weatherCoords?.lng]);
+
+  // 5-day forecast fetch — same coords as weather
+  useEffect(() => {
+    if (!weatherCoords) return;
+    let cancelled = false;
+    setForecastLoading(true);
+    setForecastError(null);
+    window.fetchForecast(weatherCoords.lat, weatherCoords.lng, 5)
+      .then(days => {
+        if (cancelled) return;
+        // Annotate each day with its computed species ratings + top species
+        const annotated = days.map(d => ({
+          ...d,
+          computed: window.computeForecastDay(d)
+        }));
+        setForecast(annotated);
+        setForecastLoading(false);
+      })
+      .catch(e => {
+        if (!cancelled) {
+          setForecast(null);
+          setForecastError(String(e.message || e).slice(0, 60));
+          setForecastLoading(false);
         }
       });
     return () => { cancelled = true; };
@@ -205,15 +249,15 @@ function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", padding: "24px 20px 60px", maxWidth: 1340, margin: "0 auto" }}>
-      <Header now={now} monthName={monthName} season={season} period={period} />
+    <div data-rt-app style={{ minHeight: "100vh", padding: vp.isMobile ? "14px 12px 40px" : "24px 20px 60px", maxWidth: 1340, margin: "0 auto" }}>
+      <Header now={now} monthName={monthName} season={season} period={period} vp={vp} />
 
       {/* Live conditions block */}
-      <div style={{
+      <div data-rt-stack style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-        gap: 16,
-        marginBottom: 16
+        gridTemplateColumns: vp.isMobile ? "1fr" : "minmax(0, 2fr) minmax(0, 1fr)",
+        gap: vp.isMobile ? 12 : 16,
+        marginBottom: vp.isMobile ? 12 : 16
       }}>
         <window.BuoyCard
           buoy={buoy}
@@ -245,14 +289,24 @@ function App() {
         lat={weatherCoords?.lat}
         lng={weatherCoords?.lng}
         locationName={zipLoc ? `${zipLoc.city}, ${zipLoc.state}` : station?.name}
+        vp={vp}
+      />
+
+      {/* 5-day bite forecast */}
+      <window.ForecastCard
+        days={forecast}
+        loading={forecastLoading}
+        error={forecastError}
+        locationName={zipLoc ? `${zipLoc.city}, ${zipLoc.state}` : station?.name}
+        onSpeciesClick={setOpenSpecies}
       />
 
       {/* Controls row */}
-      <div style={{
+      <div data-rt-stack style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
-        gap: 12,
-        marginBottom: 16,
+        gridTemplateColumns: vp.isMobile ? "1fr" : "minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
+        gap: vp.isMobile ? 10 : 12,
+        marginBottom: vp.isMobile ? 12 : 16,
         alignItems: "stretch"
       }}>
         <Control label="Buoy">
@@ -350,18 +404,19 @@ function App() {
 }
 
 // ---------- Header ----------
-function Header({ now, monthName, season, period }) {
+function Header({ now, monthName, season, period, vp }) {
+  const isMobile = vp?.isMobile;
   return (
-    <header style={{ marginBottom: 18 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+    <header style={{ marginBottom: isMobile ? 14 : 18 }}>
+      <div data-rt-flex-stack style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: isMobile ? 8 : 12 }}>
         <div>
-          <div style={{ color: "#7ec4cf", fontFamily: "'Share Tech Mono', monospace", fontSize: 11, letterSpacing: 3, marginBottom: 4 }}>
-            LAKE ERIE · SOUTHERN SHORELINE · SANDUSKY → CLEVELAND
+          <div style={{ color: "#7ec4cf", fontFamily: "'Share Tech Mono', monospace", fontSize: isMobile ? 9 : 11, letterSpacing: isMobile ? 1.5 : 3, marginBottom: 4 }}>
+            LAKE ERIE · {isMobile ? "S. SHORE" : "SOUTHERN SHORELINE · SANDUSKY → CLEVELAND"}
           </div>
-          <h1 style={{
+          <h1 data-rt-h1 style={{
             margin: 0,
             fontFamily: "'Bitter', serif",
-            fontSize: 38,
+            fontSize: isMobile ? 28 : 38,
             color: "#f0f4f8",
             fontWeight: 700,
             letterSpacing: -0.5,
@@ -369,15 +424,15 @@ function Header({ now, monthName, season, period }) {
           }}>
             Reef <span style={{ color: "#7ec4cf", fontStyle: "italic" }}>&amp;</span> Tide
           </h1>
-          <div style={{ color: "#a8b8c8", fontFamily: "'Bitter', serif", fontSize: 14, marginTop: 4, fontStyle: "italic" }}>
+          <div style={{ color: "#a8b8c8", fontFamily: "'Bitter', serif", fontSize: isMobile ? 12 : 14, marginTop: 4, fontStyle: "italic" }}>
             South-shore fishing forecast · live buoys · seasonal intelligence
           </div>
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div data-rt-header-right style={{ textAlign: isMobile ? "left" : "right", width: isMobile ? "100%" : "auto" }}>
           <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 11, color: "#7c93ad", letterSpacing: 2 }}>
             {now.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).toUpperCase()}
           </div>
-          <div style={{ fontFamily: "'Bitter', serif", fontSize: 18, color: "#dbe3ec", marginTop: 2 }}>
+          <div style={{ fontFamily: "'Bitter', serif", fontSize: isMobile ? 16 : 18, color: "#dbe3ec", marginTop: 2 }}>
             {monthName} · <span style={{ color: "#7ec4cf" }}>{period.name}</span>
           </div>
           <div style={{ color: "#7c93ad", fontSize: 12, fontFamily: "'Share Tech Mono', monospace", marginTop: 2 }}>
