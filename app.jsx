@@ -18,6 +18,7 @@ function useViewport() {
 const TABS = [
   { id: "spots",      icon: "🎣", label: "LAKE SPOTS" },
   { id: "ponds",      icon: "🪣", label: "STOCKED PONDS" },
+  { id: "map",        icon: "📜", label: "MAP" },
   { id: "species",    icon: "🐟", label: "SPECIES" },
   { id: "conditions", icon: "🌊", label: "CONDITIONS" }
 ];
@@ -248,9 +249,36 @@ function App() {
     setZip(""); setZipInput(""); setZipLoc(null); setZipError(null);
   }
 
+  // Auto-select the closest buoy whenever a new zip location is set.
+  // Only fires when the zip itself changes (so the user can still override).
+  const lastZipForBuoyRef = useRef(null);
+  useEffect(() => {
+    if (!zipLoc) { lastZipForBuoyRef.current = null; return; }
+    if (lastZipForBuoyRef.current === zipLoc.zip) return;
+    let best = null, bestD = Infinity;
+    window.BUOYS_FLAT.forEach(b => {
+      const d = window.haversineMi(zipLoc, b);
+      if (d < bestD) { bestD = d; best = b; }
+    });
+    if (best && best.id !== buoyId) setBuoyId(best.id);
+    lastZipForBuoyRef.current = zipLoc.zip;
+  }, [zipLoc, buoyId]);
+
   return (
     <div data-rt-app style={{ minHeight: "100vh", padding: vp.isMobile ? "14px 12px 40px" : "24px 20px 60px", maxWidth: 1340, margin: "0 auto" }}>
       <Header now={now} monthName={monthName} season={season} period={period} vp={vp} />
+
+      <ZipBar
+        vp={vp}
+        zipLoc={zipLoc}
+        zipInput={zipInput}
+        setZipInput={setZipInput}
+        zipError={zipError}
+        zipLoading={zipLoading}
+        handleZip={handleZip}
+        clearZip={clearZip}
+        station={station}
+      />
 
       {/* Live conditions block */}
       <div data-rt-stack style={{
@@ -304,12 +332,12 @@ function App() {
       {/* Controls row */}
       <div data-rt-stack style={{
         display: "grid",
-        gridTemplateColumns: vp.isMobile ? "1fr" : "minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr)",
+        gridTemplateColumns: vp.isMobile ? "1fr" : "minmax(0, 1.4fr) minmax(0, 1fr)",
         gap: vp.isMobile ? 10 : 12,
         marginBottom: vp.isMobile ? 12 : 16,
         alignItems: "stretch"
       }}>
-        <Control label="Buoy">
+        <Control label={zipLoc ? `Buoy · auto-set to closest (${station?.id})` : "Buoy"}>
           <select
             value={buoyId}
             onChange={e => setBuoyId(e.target.value)}
@@ -331,26 +359,6 @@ function App() {
               ))}
             </optgroup>
           </select>
-        </Control>
-
-        <Control label={zipLoc ? `Sorting by distance from ${zipLoc.city}, ${zipLoc.state}` : "Sort by distance from zip"}>
-          <form onSubmit={handleZip} style={{ display: "flex", gap: 6 }}>
-            <input
-              value={zipInput}
-              onChange={e => setZipInput(e.target.value)}
-              placeholder={zipLoc ? zipLoc.zip : "e.g. 44012"}
-              maxLength={5}
-              style={{ ...inputStyle, flex: 1 }}
-            />
-            {zipLoc ? (
-              <button type="button" onClick={clearZip} style={btnStyle("danger")}>Clear</button>
-            ) : (
-              <button type="submit" disabled={zipLoading} style={btnStyle()}>
-                {zipLoading ? "…" : "Set"}
-              </button>
-            )}
-          </form>
-          {zipError && <div style={{ color: "#e8a8a8", fontSize: 11, marginTop: 4, fontFamily: "'Share Tech Mono', monospace" }}>⚠ {zipError}</div>}
         </Control>
 
         <Control label="Filter species">
@@ -376,6 +384,21 @@ function App() {
       {tab === "ponds" && (
         <PondsTab ponds={pondsWithDistance} zipLoc={zipLoc} onSpeciesClick={setOpenSpecies} />
       )}
+      {tab === "map" && (
+        <window.MapCard
+          spots={filteredSpots}
+          ponds={pondsWithDistance}
+          zipLoc={zipLoc}
+          station={station}
+          speciesFilter={speciesFilter}
+          onSpeciesClick={setOpenSpecies}
+          vp={vp}
+          buoys={window.BUOYS_FLAT}
+          buoyId={buoyId}
+          buoy={buoy}
+          onBuoyChange={setBuoyId}
+        />
+      )}
       {tab === "species" && (
         <SpeciesTab speciesRatings={speciesRatings} onSpeciesClick={setOpenSpecies} />
       )}
@@ -399,6 +422,102 @@ function App() {
         rating={openSpecies ? speciesRatings[openSpecies.name]?.value : null}
         onClose={() => setOpenSpecies(null)}
       />
+    </div>
+  );
+}
+
+// ---------- Zip Bar (top of page) ----------
+function ZipBar({
+  vp, zipLoc, zipInput, setZipInput, zipError, zipLoading,
+  handleZip, clearZip, station
+}) {
+  const isMobile = vp?.isMobile;
+  return (
+    <div
+      data-rt-flex-stack
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: isMobile ? 8 : 12,
+        flexWrap: "wrap",
+        background: "linear-gradient(180deg, rgba(14,28,50,0.75), rgba(8,18,34,0.75))",
+        border: "1px solid rgba(126,196,207,0.20)",
+        borderRadius: 10,
+        padding: isMobile ? "8px 10px" : "10px 14px",
+        marginBottom: isMobile ? 12 : 14
+      }}
+    >
+      <div style={{
+        fontFamily: "'Share Tech Mono', monospace",
+        color: "#7ec4cf",
+        fontSize: isMobile ? 9 : 10,
+        letterSpacing: 1.5,
+        textTransform: "uppercase",
+        whiteSpace: "nowrap"
+      }}>
+        📍 Your Zip
+      </div>
+
+      <form
+        onSubmit={handleZip}
+        style={{
+          display: "flex",
+          gap: 6,
+          flex: isMobile ? "1 1 100%" : "0 0 auto",
+          minWidth: 0
+        }}
+      >
+        <input
+          value={zipInput}
+          onChange={e => setZipInput(e.target.value.replace(/\D/g, "").slice(0, 5))}
+          placeholder={zipLoc ? zipLoc.zip : "e.g. 44012"}
+          inputMode="numeric"
+          pattern="\d{5}"
+          maxLength={5}
+          aria-label="ZIP code"
+          style={{
+            ...inputStyle,
+            width: isMobile ? "auto" : 130,
+            flex: isMobile ? 1 : "0 0 auto",
+            minWidth: 0
+          }}
+        />
+        {zipLoc ? (
+          <button type="button" onClick={clearZip} style={btnStyle("danger")}>Clear</button>
+        ) : (
+          <button type="submit" disabled={zipLoading} style={btnStyle()}>
+            {zipLoading ? "…" : "Set"}
+          </button>
+        )}
+      </form>
+
+      <div style={{
+        flex: 1,
+        minWidth: 0,
+        fontFamily: "'Bitter', serif",
+        color: zipLoc ? "#dbe3ec" : "#7c93ad",
+        fontSize: isMobile ? 12 : 13,
+        fontStyle: zipLoc ? "normal" : "italic",
+        lineHeight: 1.35,
+        textAlign: isMobile ? "left" : "right"
+      }}>
+        {zipError ? (
+          <span style={{ color: "#e8a8a8", fontFamily: "'Share Tech Mono', monospace", fontSize: 11 }}>
+            ⚠ {zipError}
+          </span>
+        ) : zipLoc ? (
+          <>
+            <span style={{ color: "#f0f4f8", fontWeight: 600 }}>
+              {zipLoc.city}, {zipLoc.state}
+            </span>
+            <span style={{ color: "#7c93ad", fontFamily: "'Share Tech Mono', monospace", fontSize: 11, marginLeft: 8 }}>
+              · Sorted by distance · Buoy {station?.id}
+            </span>
+          </>
+        ) : (
+          <>Set your zip to sort spots & ponds by distance — buoy auto-snaps to the closest one.</>
+        )}
+      </div>
     </div>
   );
 }

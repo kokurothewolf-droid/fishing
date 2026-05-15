@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -75,6 +76,228 @@
 
   a { color: #7ec4cf; }
   a:hover { color: #a8d1d8; }
+
+  /* ============================================================
+     LEAFLET MAP THEMING — match dashboard dark aesthetic.
+     ============================================================ */
+  .rt-map {
+    height: 560px;
+    width: 100%;
+    border-radius: 14px;
+    background: #02080f;
+    z-index: 0;
+  }
+  @media (max-width: 720px) { .rt-map { height: 420px; } }
+  .leaflet-container {
+    font-family: 'Bitter', serif;
+    background: #02080f;
+  }
+  .leaflet-control-attribution {
+    background: rgba(8,18,34,0.85) !important;
+    color: #5d738a !important;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+  }
+  .leaflet-control-attribution a {
+    color: #7ec4cf !important;
+  }
+  .leaflet-bar a, .leaflet-bar a:hover {
+    background: rgba(8,18,34,0.92) !important;
+    color: #a8d1d8 !important;
+    border-color: rgba(126,196,207,0.25) !important;
+  }
+  .leaflet-bar a:hover { background: rgba(14,28,50,0.95) !important; }
+  .leaflet-popup-content-wrapper {
+    background: linear-gradient(180deg, rgba(14,28,50,0.97), rgba(8,18,34,0.97)) !important;
+    color: #f0f4f8 !important;
+    border: 1px solid rgba(126,196,207,0.35) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important;
+  }
+  .leaflet-popup-tip {
+    background: rgba(8,18,34,0.97) !important;
+    border: 1px solid rgba(126,196,207,0.35) !important;
+  }
+  .leaflet-popup-close-button {
+    color: #7c93ad !important;
+  }
+  .leaflet-popup-close-button:hover { color: #f0f4f8 !important; }
+  .leaflet-popup-content {
+    margin: 12px 14px !important;
+    font-family: 'Bitter', serif !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+    min-width: 220px;
+  }
+  .rt-popup-kicker {
+    font-family: 'Share Tech Mono', monospace;
+    color: #7ec4cf;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .rt-popup-title {
+    font-family: 'Bitter', serif;
+    color: #f0f4f8;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .rt-popup-meta {
+    color: #a8b8c8;
+    font-size: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    margin-bottom: 8px;
+  }
+  .rt-popup-desc {
+    color: #c0cad8;
+    font-size: 12.5px;
+    margin: 6px 0 8px;
+  }
+  .rt-popup-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .rt-popup-chip {
+    background: rgba(126,196,207,0.10);
+    border: 1px solid rgba(126,196,207,0.28);
+    color: #a8d1d8;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .rt-popup-chip:hover { background: rgba(126,196,207,0.22); color: #f0f4f8; }
+  .rt-popup-rating {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* Custom marker pin (divIcon) */
+  .rt-marker {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 2px rgba(8,18,34,0.9), 0 4px 10px rgba(0,0,0,0.55);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    transition: transform 0.15s ease;
+  }
+  .rt-marker.pond { border-radius: 6px; }
+  .rt-marker:hover { transform: scale(1.15); z-index: 1000 !important; }
+  .rt-marker-zip {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #7ec4cf;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 3px rgba(126,196,207,0.35), 0 0 14px rgba(126,196,207,0.7);
+  }
+
+  /* Buoy marker — diamond pictogram, distinct from fishing spots */
+  .rt-marker-buoy {
+    width: 22px; height: 22px;
+    transform: rotate(45deg);
+    background: rgba(8,18,34,0.92);
+    border: 2px solid #7ec4cf;
+    box-shadow: 0 0 0 1px rgba(8,18,34,0.9), 0 4px 10px rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease;
+  }
+  .rt-marker-buoy::after {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #7ec4cf;
+  }
+  .rt-marker-buoy.active {
+    background: #7ec4cf;
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(8,18,34,0.9), 0 0 16px rgba(126,196,207,0.8);
+  }
+  .rt-marker-buoy.active::after { background: #02080f; }
+  .rt-marker-wrap:hover .rt-marker-buoy { transform: rotate(45deg) scale(1.18); }
+
+  /* Legend overlay */
+  .rt-legend {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 500;
+    background: linear-gradient(180deg, rgba(14,28,50,0.94), rgba(8,18,34,0.94));
+    border: 1px solid rgba(126,196,207,0.25);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10.5px;
+    color: #dbe3ec;
+    letter-spacing: 0.5px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+    pointer-events: none;
+    min-width: 132px;
+  }
+  .rt-legend-header {
+    color: #7ec4cf;
+    font-size: 9.5px;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .rt-legend-row {
+    display: flex; align-items: center; gap: 7px;
+    margin: 3px 0;
+  }
+  .rt-legend-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.85);
+  }
+  .rt-legend-sq {
+    width: 12px; height: 12px; border-radius: 3px;
+    border: 1.5px solid rgba(255,255,255,0.85);
+  }
+
+  /* Toggle pill row (above map) */
+  .rt-map-toggles {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .rt-map-toggle {
+    background: rgba(8,18,34,0.55);
+    border: 1px solid rgba(126,196,207,0.25);
+    color: #a8b8c8;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .rt-map-toggle.active {
+    background: rgba(126,196,207,0.18);
+    color: #f0f4f8;
+    border-color: rgba(126,196,207,0.55);
+  }
+  .rt-map-toggle:hover { color: #f0f4f8; }
 
   /* ============================================================
      MOBILE FALLBACKS — CSS-driven, robust against JS hook failures.
@@ -163,10 +386,12 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="data.js"></script>
 <script src="intelligence.js"></script>
 <script src="astro.js"></script>
 <script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="map.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>
